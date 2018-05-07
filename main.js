@@ -24,9 +24,8 @@ function writeImage(image) {
 }
 
 port.on('open', function() {
-    setInterval(function () {
-        writeImage(Image.random());
-    }, 2500)
+    Image.fromImageFile("./images/arrow.jpg")
+        .then(writeImage);
 });
 
 let recentData = '';

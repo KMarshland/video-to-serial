@@ -1,3 +1,6 @@
+const sharp = require('sharp');
+const fs = require('fs');
+
 const gridSize = require('./config/gridsize.js');
 const byteSize = 8;
 
@@ -71,9 +74,31 @@ class Image {
         return image;
     }
 
-    static fromImage(imagePath) {
-        sharp(inputBuffer)
-            .resize(320, 240);
+    static fromImageFile(imagePath) {
+        return new Promise(function (resolve, reject) {
+            fs.readFile(imagePath, (err, data) => {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+
+                sharp(data)
+                    .resize(gridSize, gridSize)
+                    .greyscale()
+                    .raw()
+                    .toBuffer()
+                    .catch(reject)
+                    .then(function (greyscale) {
+                        let data = [];
+
+                        for (let i = 0; i < greyscale.length; i++) {
+                            data.push(greyscale[i] < 128);
+                        }
+
+                        resolve(new Image(data));
+                    });
+            });
+        });
     }
 }
 

@@ -6,6 +6,7 @@
   "license": "MIT",
   "dependencies": {
     "npm": "^6.0.0",
-    "serialport": "^6.2.0"
+    "serialport": "^6.2.0",
+    "sharp": "^0.20.2"
   }
 }
