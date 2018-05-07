@@ -1,8 +1,8 @@
-
+const fs = require('fs');
 const SerialPort = require('serialport');
 const Image = require('./image.js');
 
-const baud = 9600;
+const baud = 115200;
 const portLocation = '/dev/cu.SLAB_USBtoUART';
 
 const port = new SerialPort(portLocation, {
@@ -23,25 +23,65 @@ function writeImage(image) {
     });
 }
 
-port.on('open', function() {
-    Image.fromImageFile("./images/arrow.jpg")
-        .then(writeImage);
-});
-
-let recentData = '';
-let printTimeout;
-port.on('data', function (data) {
-    recentData += data.toString('utf8');
-
-    if (recentData.length > 100) {
-        printTimeout && clearTimeout(printTimeout);
-        console.log('Data:', recentData);
-        recentData = '';
-    } else {
-        printTimeout && clearTimeout(printTimeout);
-        printTimeout = setTimeout(function () {
-            console.log(recentData);
-            recentData = '';
-        }, 50);
+/*
+ * Expects an array of images
+ */
+function writeImages(images, delay) {
+    if (!delay) {
+        delay = 1000 / images.length;
     }
+
+    let i = 0;
+
+    function writeNext() {
+        writeImage(images[i++ % images.length]);
+        setTimeout(writeNext, delay);
+    }
+
+    writeNext();
+}
+
+port.on('open', function() {
+    const file = process.argv[2];
+    const fileExists = fs.existsSync(file);
+
+    if (file && !fileExists) {
+        console.error('No such file', file);
+    }
+
+    if (file && fileExists) {
+        console.log('Inputing file', file);
+
+        if (file.split('.').pop() == 'gif') {
+            Image.fromGif(file)
+                .then(writeImages);
+        } else {
+            Image.fromImageFile(file)
+                .then(writeImage);
+        }
+        return;
+    }
+
+    console.log('Making random images');
+    setInterval(function () {
+        writeImage(Image.random());
+    }, 2500);
 });
+
+// let recentData = '';
+// let printTimeout;
+// port.on('data', function (data) {
+//     recentData += data.toString('utf8');
+//
+//     if (recentData.length > 100) {
+//         printTimeout && clearTimeout(printTimeout);
+//         console.log('Data:', recentData);
+//         recentData = '';
+//     } else {
+//         printTimeout && clearTimeout(printTimeout);
+//         printTimeout = setTimeout(function () {
+//             console.log(recentData);
+//             recentData = '';
+//         }, 50);
+//     }
+// });

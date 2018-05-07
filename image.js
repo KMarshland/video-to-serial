@@ -1,4 +1,5 @@
 const sharp = require('sharp');
+const gifFrames = require('gif-frames');
 const fs = require('fs');
 
 const gridSize = require('./config/gridsize.js');
@@ -98,6 +99,44 @@ class Image {
                         resolve(new Image(data));
                     });
             });
+        });
+    }
+
+    static fromGif(imagePath) {
+        return new Promise(function (resolve, reject) {
+            gifFrames({
+                url: imagePath,
+                outputType: 'png',
+                frames: 'all'
+            })
+                .catch(reject)
+                .then(function (frameData) {
+
+                    const frames = [];
+                    const basePath = './tmp/image-' + Math.floor(Math.random() * 1e12) + '-';
+
+                    frameData.forEach(function (frame) {
+
+                        const tmpPath = basePath + frame.frameIndex + '.png';
+
+                        let ws = fs.createWriteStream(tmpPath);
+
+                        ws.on('finish', function() {
+                            Image.fromImageFile(tmpPath)
+                                .catch(reject)
+                                .then(function (image) {
+                                    fs.unlink(tmpPath, ()=>{});
+                                    frames.push(image);
+
+                                    if (frames.length == frameData.length) {
+                                        resolve(frames);
+                                    }
+                                });
+                        });
+
+                        frame.getImage().pipe(ws);
+                    });
+                });
         });
     }
 }
