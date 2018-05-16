@@ -4,6 +4,10 @@
   "main": "main.js",
   "author": "Kai Marshland",
   "license": "MIT",
+  "scripts": {
+    "start": "node main.js",
+    "test": "node main.js -t"
+  },
   "dependencies": {
     "gif-frames": "^0.4.0",
     "npm": "^6.0.0",

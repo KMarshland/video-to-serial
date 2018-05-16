@@ -1,9 +1,21 @@
 const fs = require('fs');
-const SerialPort = require('serialport');
 const Image = require('./image.js');
 
+const mockArduino = process.argv.includes('--test') || process.argv.includes('-t');
+const printReturns = false;
+const SerialPort = mockArduino ? require('serialport/test') : require('serialport');
+
 const baud = 115200;
-const portLocation = '/dev/cu.SLAB_USBtoUART';
+let portLocation = '/dev/cu.SLAB_USBtoUART';
+
+if (mockArduino) {
+    const mockLocation = '/dev/serial-test';
+    SerialPort.Binding.createPort(mockLocation, {
+        echo: false,
+        record: false
+    });
+    portLocation = mockLocation;
+}
 
 const port = new SerialPort(portLocation, {
     baudRate: baud
@@ -42,7 +54,11 @@ function writeImages(images, delay) {
 }
 
 port.on('open', function() {
-    const file = process.argv[2];
+    let file = process.argv[process.argv.length - 1];
+    if (file[0] == '-' || file == 'main.js') { // ignore normal args
+        file = null;
+    }
+
     const fileExists = fs.existsSync(file);
 
     if (file && !fileExists) {
@@ -68,20 +84,22 @@ port.on('open', function() {
     }, 2500);
 });
 
-// let recentData = '';
-// let printTimeout;
-// port.on('data', function (data) {
-//     recentData += data.toString('utf8');
-//
-//     if (recentData.length > 100) {
-//         printTimeout && clearTimeout(printTimeout);
-//         console.log('Data:', recentData);
-//         recentData = '';
-//     } else {
-//         printTimeout && clearTimeout(printTimeout);
-//         printTimeout = setTimeout(function () {
-//             console.log(recentData);
-//             recentData = '';
-//         }, 50);
-//     }
-// });
+if (printReturns) {
+    let recentData = '';
+    let printTimeout;
+    port.on('data', function (data) {
+        recentData += data.toString('utf8');
+
+        if (recentData.length > 100) {
+            printTimeout && clearTimeout(printTimeout);
+            console.log('Data:', recentData);
+            recentData = '';
+        } else {
+            printTimeout && clearTimeout(printTimeout);
+            printTimeout = setTimeout(function () {
+                console.log(recentData);
+                recentData = '';
+            }, 50);
+        }
+    });
+}
