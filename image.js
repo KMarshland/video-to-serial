@@ -119,8 +119,17 @@ class Image {
         return new Image(data);
     }
 
-    static fromImageFile(imagePath) {
+    /*
+     * Loads an image file, and turns it into an Image object
+     * Does so by resizing, turning to greyscale, and quantizing brightness
+     *
+     * Options
+     *  removeAfter If true, it deletes the file at imagePath after resolving
+     */
+    static fromImageFile(imagePath, opts) {
         return new Promise(function (resolve, reject) {
+            opts = opts || {};
+
             fs.readFile(imagePath, (err, data) => {
                 if (err) {
                     reject(err);
@@ -150,6 +159,11 @@ class Image {
                         }
 
                         resolve(new Image(data));
+
+                        // delete the file if requested
+                        if (opts.removeAfter) {
+                            fs.unlink(imagePath, ()=>{});
+                        }
                     });
             });
         });
@@ -175,10 +189,9 @@ class Image {
                         let ws = fs.createWriteStream(tmpPath);
 
                         ws.on('finish', function() {
-                            Image.fromImageFile(tmpPath)
+                            Image.fromImageFile(tmpPath, {removeAfter: true})
                                 .catch(reject)
                                 .then(function (image) {
-                                    fs.unlink(tmpPath, ()=>{});
                                     frames.push(image);
 
                                     if (frames.length == frameData.length) {

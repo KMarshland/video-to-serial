@@ -4,6 +4,7 @@ const Video = require('./video.js');
 
 const mockArduino = process.argv.includes('--test') || process.argv.includes('-t');
 const printReturns = process.argv.includes('--print') || process.argv.includes('-p');
+const quiteMode = process.argv.includes('--quiet') || process.argv.includes('-q');
 const SerialPort = mockArduino ? require('serialport/test') : require('serialport');
 
 const baud = 115200;
@@ -25,15 +26,15 @@ const port = new SerialPort(portLocation, {
 /*
  * Image should be an array of bits
  */
-function writeImage(image, skipDebug) {
-    !skipDebug && image.show();
+function writeImage(image) {
+    !quiteMode && image.show();
 
     const buffer = image.buffer();
     port.write(buffer, function (err) {
         if (err) {
             return console.log('Error on write: ', err.message);
         }
-        !skipDebug && console.log('Wrote: ', buffer);
+        !console.log('Wrote: ', buffer);
     });
 }
 

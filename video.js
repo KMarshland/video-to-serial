@@ -10,7 +10,28 @@ class Video {
      */
     static videoFrame(videoPath, time) {
         return new Promise(function (resolve, reject) {
-            resolve(Image.random());
+            const start = Video.secondsToTimeString(time);
+            const outfile = './tmp/video-frame-' + Math.floor(Math.random() * 1e12) + '.png';
+            const cmd = 'ffmpeg -loglevel error -i ' + videoPath + ' -ss ' + start + ' -vframes 1 ' + outfile;
+
+            const startTime = new Date();
+            exec(cmd, async function(err, stdout, stderr) {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+
+                if (stderr) {
+                    reject(stderr);
+                    return;
+                }
+
+                const frame = await Image.fromImageFile(outfile, {
+                    removeAfter: true
+                });
+                console.log(Math.round(new Date() - startTime) + 'ms to generate frame');
+                resolve(frame);
+            });
         });
     }
 
@@ -39,7 +60,7 @@ class Video {
                     return;
                 }
 
-                const parts = stdout.match(durationPattern)
+                const parts = stdout.match(durationPattern);
                 const hours = parseFloat(parts[1]);
                 const minutes = parseFloat(parts[2]);
                 const seconds = parseFloat(parts[3]) + parseFloat('0.' + parts[4]);
@@ -48,6 +69,24 @@ class Video {
             });
 
         });
+    }
+
+    /*
+     * Takes a number time, and turns it into a string like 01:02:03.435
+     */
+    static secondsToTimeString(absSeconds) {
+        const ms = Math.floor(1000 * (absSeconds - Math.floor(absSeconds)));
+        const seconds = Math.floor(absSeconds % 60);
+        const minutes = Math.floor((absSeconds / 60) % 60);
+        const hours = Math.floor(absSeconds / 60 / 60);
+
+        function pad(num, size) {
+            let s = num + "";
+            while (s.length < size) s = "0" + s;
+            return s;
+        }
+
+        return pad(hours, 2) + ':' + pad(minutes, 2) + ':' + pad(seconds, 2) + '.' + pad(ms, 3);
     }
 
     /*
