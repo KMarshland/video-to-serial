@@ -27,11 +27,12 @@ const port = new SerialPort(portLocation, {
 function writeImage(image) {
     image.show();
 
-    port.write(image.buffer(), function (err) {
+    const buffer = image.buffer();
+    port.write(buffer, function (err) {
         if (err) {
             return console.log('Error on write: ', err.message);
         }
-        console.log('Wrote: ', image.buffer());
+        console.log('Wrote: ', buffer);
     });
 }
 
@@ -57,6 +58,16 @@ port.on('open', function() {
     let file = process.argv[process.argv.length - 1];
     if (file[0] == '-' || file == 'main.js') { // ignore normal args
         file = null;
+    }
+
+    if (file == 'empty' || file == 'e') {
+        writeImage(Image.empty());
+        return;
+    }
+
+    if (file == 'full' || file == 'f') {
+        writeImage(Image.full());
+        return;
     }
 
     const fileExists = fs.existsSync(file);

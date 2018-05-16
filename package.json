@@ -9,6 +9,7 @@
     "test": "node main.js -t"
   },
   "dependencies": {
+    "chalk": "^2.4.1",
     "gif-frames": "^0.4.0",
     "npm": "^6.0.0",
     "serialport": "^6.2.0",
