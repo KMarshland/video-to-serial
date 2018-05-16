@@ -24,15 +24,15 @@ const port = new SerialPort(portLocation, {
 /*
  * Image should be an array of bits
  */
-function writeImage(image) {
-    image.show();
+function writeImage(image, skipDebug) {
+    !skipDebug && image.show();
 
     const buffer = image.buffer();
     port.write(buffer, function (err) {
         if (err) {
             return console.log('Error on write: ', err.message);
         }
-        console.log('Wrote: ', buffer);
+        !skipDebug && console.log('Wrote: ', buffer);
     });
 }
 
@@ -79,14 +79,29 @@ port.on('open', function() {
     if (file && fileExists) {
         console.log('Inputing file', file);
 
-        if (file.split('.').pop() == 'gif') {
+        if (/gif$/.test(file)) {
             Image.fromGif(file)
                 .then(writeImages);
-        } else {
+            return;
+        }
+
+        if (/png|jpg|jpeg/.test(file)) {
             Image.fromImageFile(file)
                 .then(writeImage);
+            return;
         }
-        return;
+
+        if (/mov|mp4|mkv/.test(file)) {
+            Image.fromVideo(file, function (frame) {
+               if (!frame) {
+                   port.close();
+                   return;
+               }
+
+               writeImage(frame);
+            });
+            return;
+        }
     }
 
     console.log('Making random images');
