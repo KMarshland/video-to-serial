@@ -1,5 +1,6 @@
 const fs = require('fs');
 const Image = require('./image.js');
+const Video = require('./video.js');
 
 const mockArduino = process.argv.includes('--test') || process.argv.includes('-t');
 const printReturns = process.argv.includes('--print') || process.argv.includes('-p');
@@ -92,7 +93,7 @@ port.on('open', function() {
         }
 
         if (/mov|mp4|mkv/.test(file)) {
-            Image.fromVideo(file, function (frame) {
+            Video.fromFile(file, function (frame) {
                if (!frame) {
                    port.close();
                    return;
