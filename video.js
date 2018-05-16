@@ -1,3 +1,4 @@
+const exec = require('child_process').exec;
 const Image = require('./image.js');
 const sleep = require('./sleep');
 
@@ -10,6 +11,42 @@ class Video {
     static videoFrame(videoPath, time) {
         return new Promise(function (resolve, reject) {
             resolve(Image.random());
+        });
+    }
+
+    /*
+     * Returns a promise of the video length in seconds
+     */
+    static duration(videoPath) {
+        return new Promise(function (resolve, reject) {
+            const cmd = 'ffmpeg -i ' + videoPath + ' 2>&1 | grep "Duration"';
+
+            exec(cmd, function(err, stdout, stderr) {
+                if (err) {
+                    reject(err);
+                    return;
+                }
+
+                if (stderr) {
+                    reject(stderr);
+                    return;
+                }
+
+                const durationPattern = /Duration: (\d+):(\d+):(\d+)\.(\d+)/;
+                if (!durationPattern.test(stdout)) {
+                    console.log(stdout);
+                    reject('Failed to extract duration');
+                    return;
+                }
+
+                const parts = stdout.match(durationPattern)
+                const hours = parseFloat(parts[1]);
+                const minutes = parseFloat(parts[2]);
+                const seconds = parseFloat(parts[3]) + parseFloat('0.' + parts[4]);
+
+                resolve(seconds + 60*minutes + 60*60*hours);
+            });
+
         });
     }
 
@@ -33,8 +70,7 @@ class Video {
         let bufferHead = 0;
         let playbackHead = 0;
 
-        // TODO: get length of video in seconds
-        const videoLength = 10;
+        const videoLength = await Video.duration(videoPath);
         const maxHead = videoLength * fps;
 
         for (let i = 0; i < Math.min(bufferSize, maxHead); i++) {
