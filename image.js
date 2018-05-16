@@ -5,7 +5,7 @@ const fs = require('fs');
 
 const gridSize = require('./config/gridsize.js');
 const byteSize = 8;
-const brightnessBits = 4;
+const brightnessBits = 8;
 if (byteSize % brightnessBits !== 0) {
     throw "Brightness must fit evenly into bytes"
 }
@@ -64,7 +64,7 @@ class Image {
                 const correctValue = this.data[index];
 
                 const relevantByte = buffer.readUInt8(Math.floor(index * brightnessBits / byteSize));
-                const shiftDistance = Math.floor(index * brightnessBits % byteSize);
+                const shiftDistance = Math.floor((index * brightnessBits) % byteSize);
                 const extractedValue = (relevantByte >> shiftDistance) & maxBrightness;
 
                 if (correctValue != extractedValue) {

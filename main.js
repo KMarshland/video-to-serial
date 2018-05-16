@@ -2,7 +2,7 @@ const fs = require('fs');
 const Image = require('./image.js');
 
 const mockArduino = process.argv.includes('--test') || process.argv.includes('-t');
-const printReturns = false;
+const printReturns = process.argv.includes('--print') || process.argv.includes('-p');
 const SerialPort = mockArduino ? require('serialport/test') : require('serialport');
 
 const baud = 115200;
@@ -98,12 +98,14 @@ port.on('open', function() {
 if (printReturns) {
     let recentData = '';
     let printTimeout;
+    console.log('Waiting for data');
     port.on('data', function (data) {
         recentData += data.toString('utf8');
 
         if (recentData.length > 100) {
             printTimeout && clearTimeout(printTimeout);
-            console.log('Data:', recentData);
+            console.log('Data:');
+            console.log(recentData);
             recentData = '';
         } else {
             printTimeout && clearTimeout(printTimeout);
