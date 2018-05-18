@@ -1,6 +1,5 @@
 const exec = require('child_process').exec;
 const Image = require('./image.js');
-const sleep = require('./sleep');
 
 class Video {
 
