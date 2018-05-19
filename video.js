@@ -21,6 +21,7 @@ class Video {
         this.fps = opts.fps || 24;
         this.bufferSize = opts.bufferSize || 50; // frames in advance to hold a buffer
         this.bufferRatio = opts.bufferRatio || 4;
+        this.frameBatchSize = opts.frameBatchSize || 10;
     }
 
     async initialize() {
@@ -75,23 +76,19 @@ class Video {
                 return resolve(null);
             }
 
-            const frame = await this.frame(time);
+            const num = this.frameBatchSize;
 
-            resolve([frame]);
-        }).bind(this));
-    }
-
-    /*
-     * Returns a promise of an image of the video at the given time
-     * Expects time to be in seconds
-     */
-    frame(time) {
-        return new Promise((function (resolve, reject) {
             const start = Video.secondsToTimeString(time);
-            const outfile = './tmp/video-frame-' + Math.floor(Math.random() * 1e12) + '.png';
-            const cmd = 'ffmpeg -loglevel error -i ' + this.videoPath + ' -ss ' + start + ' -vframes 1 ' + outfile;
+            const duration = Video.secondsToTimeString(num / this.fps);
 
-            const startTime = new Date();
+            const outfile = './tmp/video-frame-' + Math.floor(Math.random() * 1e12) + '-%d.png';
+            const cmd = 'ffmpeg -loglevel error ' +
+                '-i ' + this.videoPath +
+                ' -ss ' + start +
+                ' -vf fps=' + this.fps +
+                ' -t ' + duration +
+                ' ' + outfile;
+
             exec(cmd, async function(err, stdout, stderr) {
                 if (err) {
                     reject(err);
@@ -103,11 +100,17 @@ class Video {
                     return;
                 }
 
-                const frame = await Image.fromImageFile(outfile, {
-                    removeAfter: true
-                });
-                console.log(Math.round(new Date() - startTime) + 'ms to generate frame');
-                resolve(frame);
+                const frames = [];
+                for (let i = 0; i < num; i++) {
+                    const frame = await Image.fromImageFile(outfile.replace('%d', i+1), {
+                        removeAfter: true
+                    });
+
+                    frames.push(frame);
+                }
+
+
+                resolve(frames);
             });
         }).bind(this));
     }
