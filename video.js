@@ -1,9 +1,10 @@
 const exec = require('child_process').exec;
 const spawn = require('child_process').spawn;
-const sharp = require('sharp');
 const P2J = require('pipe2jpeg');
 const Image = require('./image.js');
 const RollingBuffer = require('./rolling_buffer.js');
+const gridSize = require('./config/gridsize.js');
+const sleep = require('./sleep.js');
 
 class Video {
 
@@ -21,10 +22,12 @@ class Video {
         this.videoPath = videoPath;
 
         opts = opts || {};
-        this.fps = opts.fps || 10;
-        this.bufferSize = opts.bufferSize || 50; // frames in advance to hold a buffer
+        this.fps = opts.fps || 12;
+        this.bufferSize = opts.bufferSize || 1; // frames in advance to hold a buffer
         this.bufferRatio = opts.bufferRatio || 1;
-        this.frameBatchSize = opts.frameBatchSize || 10;
+        this.frameBatchSize = opts.frameBatchSize || 12;
+
+        this.recylable = [];
     }
 
     async initialize() {
@@ -64,6 +67,7 @@ class Video {
         }
 
         eachFrame(frame);
+        this.recylable.push(frame);
 
         const realTime = new Date() - this.startTime;
         const lag = realTime - 1000*this.buffer.playHead / this.fps;
@@ -84,6 +88,11 @@ class Video {
      */
     productionFunction(head) {
         return new Promise((async function (resolve, reject) {
+            while (this.processing) { // forbid multiple production threads bogging things down
+                await sleep(10);
+            }
+            this.processing = true;
+
             const time = head / this.fps;
             if (time >= this.length) {
                 return resolve(null);
@@ -100,8 +109,7 @@ class Video {
                 '-loglevel', 'error',
                 '-i',  this.videoPath,
                 '-ss', start,
-                '-vf', 'fps='+this.fps,
-                '-vf', 'scale=8:8',
+                '-vf', 'fps='+this.fps + ', scale=' + gridSize + ':' + gridSize,
                 '-t', duration,
                 '-f', 'image2pipe',
                 '-vcodec', 'mjpeg',
@@ -113,19 +121,21 @@ class Video {
             let closed = false;
 
             const p2j = new P2J();
-            p2j.on('jpeg', async (data) => {
+            p2j.on('jpeg', (async (data) => {
                 startedFrames++;
 
                 const frame = await Image.fromRawData(data, {
-                    prescaled: true
+                    prescaled: true,
+                    recycle: this.recylable.pop() // TODO: race condition?
                 });
 
                 frames.push(frame);
 
-                if (closed) {
+                if (closed && startedFrames == frames.length) {
+                    this.processing = false;
                     resolve(frames);
                 }
-            });
+            }).bind(this));
 
             const child = spawn(cmd, args);
 
@@ -137,6 +147,7 @@ class Video {
                 closed = true;
 
                 if (startedFrames == frames.length) {
+                    this.processing = false;
                     resolve(frames);
                 }
             });

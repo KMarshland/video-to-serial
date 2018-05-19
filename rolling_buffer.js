@@ -56,7 +56,7 @@ class RollingBuffer {
             this.buffer[this.bufferHead++] = outputs[i];
         }
 
-        console.log('Avg latency: ' + Math.round((startTime - new Date()) / outputs.length) + 'ms');
+        console.log('Avg latency: ' + Math.round((startTime - new Date()) / outputs.length) + 'ms (' + outputs.length + ' items)');
     }
 
     /*

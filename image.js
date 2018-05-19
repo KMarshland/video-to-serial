@@ -124,10 +124,10 @@ class Image {
      * Does so by resizing, turning to greyscale, and quantizing brightness
      *
      * Options
-     *  prescaled If true, skips the scale step
+     *  prescaled: If true, skips the scale step
+     *  recycle: An Image object that can have its data overwritten (to reduce garbage collector usage)
      */
     static fromRawData(data, opts) {
-        fs.writeFile('tmp/arip.png', data, ()=>{});
         return new Promise(function (resolve, reject) {
             let pipeline;
             if (opts.prescaled) {
@@ -147,17 +147,29 @@ class Image {
                 .toBuffer()
                 .catch(reject)
                 .then(function (greyscale) {
-                    let data = [];
+                    if (opts.recycle) {
+                        for (let i = 0; i < greyscale.length; i++) {
+                            // quantize the 8 bit grayscale to brightnessBits bits
+                            const darkness = Math.floor(greyscale[i] / brightnessDivisor);
 
-                    for (let i = 0; i < greyscale.length; i++) {
-                        // quantize the 8 bit grayscale to brightnessBits bits
-                        const darkness = Math.floor(greyscale[i]/brightnessDivisor);
+                            // invert it, as 255 is max brightness, not black
+                            opts.recycle.data[i] = maxBrightness - darkness;
+                        }
 
-                        // invert it, as 255 is max brightness, not black
-                        data.push(maxBrightness - darkness);
+                        resolve(opts.recycle);
+                    } else {
+                        let data = [];
+
+                        for (let i = 0; i < greyscale.length; i++) {
+                            // quantize the 8 bit grayscale to brightnessBits bits
+                            const darkness = Math.floor(greyscale[i] / brightnessDivisor);
+
+                            // invert it, as 255 is max brightness, not black
+                            data.push(maxBrightness - darkness);
+                        }
+
+                        resolve(new Image(data));
                     }
-
-                    resolve(new Image(data));
                 });
         });
     }

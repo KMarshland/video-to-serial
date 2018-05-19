@@ -1,3 +1,3 @@
-const brightnessBits = 8;
+const brightnessBits = 4;
 
 module.exports = brightnessBits;
