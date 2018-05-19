@@ -1,4 +1,7 @@
 const exec = require('child_process').exec;
+const spawn = require('child_process').spawn;
+const sharp = require('sharp');
+const P2J = require('pipe2jpeg');
 const Image = require('./image.js');
 const RollingBuffer = require('./rolling_buffer.js');
 
@@ -91,39 +94,54 @@ class Video {
             const start = Video.secondsToTimeString(time);
             const duration = Video.secondsToTimeString(num / this.fps);
 
-            const outfile = './tmp/video-frame-' + Math.floor(Math.random() * 1e12) + '-%d.png';
-            const cmd = 'ffmpeg -loglevel error ' +
-                '-i ' + this.videoPath +
-                ' -ss ' + start +
-                ' -vf fps=' + this.fps +
-                ' -vf scale=8:8' +
-                ' -t ' + duration +
-                ' ' + outfile;
+            const cmd = 'ffmpeg';
 
-            exec(cmd, async function(err, stdout, stderr) {
-                if (err) {
-                    reject(err);
-                    return;
+            const args = [
+                '-loglevel', 'error',
+                '-i',  this.videoPath,
+                '-ss', start,
+                '-vf', 'fps='+this.fps,
+                '-vf', 'scale=8:8',
+                '-t', duration,
+                '-f', 'image2pipe',
+                '-vcodec', 'mjpeg',
+                'pipe:1'
+            ];
+
+            const frames = [];
+            let startedFrames = 0;
+            let closed = false;
+
+            const p2j = new P2J();
+            p2j.on('jpeg', async (data) => {
+                startedFrames++;
+
+                const frame = await Image.fromRawData(data, {
+                    prescaled: true
+                });
+
+                frames.push(frame);
+
+                if (closed) {
+                    resolve(frames);
                 }
-
-                if (stderr) {
-                    reject(stderr);
-                    return;
-                }
-
-                const frames = [];
-                for (let i = 0; i < num; i++) {
-                    const frame = await Image.fromImageFile(outfile.replace('%d', i+1), {
-                        removeAfter: true,
-                        prescaled: true
-                    });
-
-                    frames.push(frame);
-                }
-
-
-                resolve(frames);
             });
+
+            const child = spawn(cmd, args);
+
+            child.stderr.on('data', (data) => {
+                console.error(`child stderr:\n${data}`);
+            });
+
+            child.on('close', () => {
+                closed = true;
+
+                if (startedFrames == frames.length) {
+                    resolve(frames);
+                }
+            });
+
+            child.stdout.pipe(p2j);
         }).bind(this));
     }
 

@@ -120,6 +120,49 @@ class Image {
     }
 
     /*
+     * Takes raw image data and turns it into an Image object
+     * Does so by resizing, turning to greyscale, and quantizing brightness
+     *
+     * Options
+     *  prescaled If true, skips the scale step
+     */
+    static fromRawData(data, opts) {
+        fs.writeFile('tmp/arip.png', data, ()=>{});
+        return new Promise(function (resolve, reject) {
+            let pipeline;
+            if (opts.prescaled) {
+                pipeline = sharp(data)
+                    .greyscale();
+            } else {
+                pipeline = sharp(data)
+                    .resize(gridSize, gridSize)
+                    .greyscale();
+            }
+
+            if (storeIntermediateImages) {
+                pipeline.toFile('tmp/debug-' + new Date().valueOf() + '.png');
+            }
+
+            pipeline.raw()
+                .toBuffer()
+                .catch(reject)
+                .then(function (greyscale) {
+                    let data = [];
+
+                    for (let i = 0; i < greyscale.length; i++) {
+                        // quantize the 8 bit grayscale to brightnessBits bits
+                        const darkness = Math.floor(greyscale[i]/brightnessDivisor);
+
+                        // invert it, as 255 is max brightness, not black
+                        data.push(maxBrightness - darkness);
+                    }
+
+                    resolve(new Image(data));
+                });
+        });
+    }
+
+    /*
      * Loads an image file, and turns it into an Image object
      * Does so by resizing, turning to greyscale, and quantizing brightness
      *
@@ -137,36 +180,8 @@ class Image {
                     return;
                 }
 
-                let pipeline;
-                if (opts.prescaled) {
-                    pipeline = sharp(data)
-                        .greyscale();
-                } else {
-                    pipeline = sharp(data)
-                        .resize(gridSize, gridSize)
-                        .greyscale();
-                }
-
-                if (storeIntermediateImages) {
-                    pipeline.toFile('tmp/debug-' + new Date().valueOf() + '.png');
-                }
-
-                pipeline.raw()
-                    .toBuffer()
-                    .catch(reject)
-                    .then(function (greyscale) {
-                        let data = [];
-
-                        for (let i = 0; i < greyscale.length; i++) {
-                            // quantize the 8 bit grayscale to brightnessBits bits
-                            const darkness = Math.floor(greyscale[i]/brightnessDivisor);
-
-                            // invert it, as 255 is max brightness, not black
-                            data.push(maxBrightness - darkness);
-                        }
-
-                        resolve(new Image(data));
-
+                Image.fromRawData(data, opts)
+                    .then(function (image) {
                         // delete the file if requested
                         if (opts.removeAfter) {
                             fs.unlink(imagePath, (err)=>{
@@ -175,7 +190,10 @@ class Image {
                                 }
                             });
                         }
-                    });
+
+                        resolve(image);
+                    })
+                    .catch(reject);
             });
         });
     }
