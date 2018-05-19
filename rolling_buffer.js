@@ -1,6 +1,6 @@
 const sleep = require('./sleep');
 
-class Buffer {
+class RollingBuffer {
 
     /*
      * Constructor
@@ -9,7 +9,6 @@ class Buffer {
      *
      * Options:
      *  targetSize: size beyond which it won't produce
-     *  skipPrebuffer: whether to skip prebuffering on creation
      */
     constructor(productionFunction, opts) {
         opts = opts || {};
@@ -21,10 +20,6 @@ class Buffer {
         this.buffer = {};
 
         this.productionFunction = productionFunction;
-
-        if (!opts.skipPrebuffer) {
-            this.prebuffer();
-        }
     }
 
     /*
@@ -49,16 +44,19 @@ class Buffer {
             return;
         }
 
-        const outputs = await this.productionFunction();
+        const startTime = new Date();
+        const outputs = await this.productionFunction(this.bufferHead);
 
-        if (outputs.length === 0) {
+        if (outputs === null) {
             this.done = true;
             return;
         }
 
         for (let i = 0; i < outputs.length; i++) {
-            this.buffer[this.bufferHead++] = output;
+            this.buffer[this.bufferHead++] = outputs[i];
         }
+
+        console.log('Avg latency: ' + Math.round((startTime - new Date()) / outputs.length) + 'ms');
     }
 
     /*
@@ -91,4 +89,4 @@ class Buffer {
 
 }
 
-module.exports = Buffer;
+module.exports = RollingBuffer;

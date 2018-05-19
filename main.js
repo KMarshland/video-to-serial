@@ -94,14 +94,17 @@ port.on('open', function() {
         }
 
         if (/mov|mp4|mkv/.test(file)) {
-            Video.fromFile(file, function (frame) {
-               if (!frame) {
-                   port.close();
-                   return;
-               }
+            const video = new Video(file);
 
-               writeImage(frame);
+            video.play(function (frame) {
+                if (!frame) {
+                    port.close();
+                    return;
+                }
+
+                writeImage(frame);
             });
+
             return;
         }
     }
