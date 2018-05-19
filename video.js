@@ -18,9 +18,9 @@ class Video {
         this.videoPath = videoPath;
 
         opts = opts || {};
-        this.fps = opts.fps || 24;
+        this.fps = opts.fps || 10;
         this.bufferSize = opts.bufferSize || 50; // frames in advance to hold a buffer
-        this.bufferRatio = opts.bufferRatio || 4;
+        this.bufferRatio = opts.bufferRatio || 1;
         this.frameBatchSize = opts.frameBatchSize || 10;
     }
 
@@ -43,26 +43,36 @@ class Video {
     async play(eachFrame) {
         await this.initialize();
 
-        this.playInterval = setInterval((async function () {
-
-            const frame = await this.buffer.consume({
-                sleepTime: 1000/this.fps/this.bufferRatio
-            });
-
-            if (frame === null) {
-                clearInterval(this.playInterval);
-            }
-
-            eachFrame(frame);
-        }).bind(this), 1000/this.fps);
+        this.startTime = new Date();
+        this.playNextFrame(eachFrame);
 
         this.bufferInterval = setInterval((function () {
             this.buffer.produce();
         }).bind(this), 1000/this.fps/this.bufferRatio);
     }
 
+    async playNextFrame(eachFrame) {
+        const frame = await this.buffer.consume({
+            sleepTime: 1000/this.fps/this.bufferRatio
+        });
+
+        if (frame === null) {
+            return;
+        }
+
+        eachFrame(frame);
+
+        const realTime = new Date() - this.startTime;
+        const lag = realTime - 1000*this.buffer.playHead / this.fps;
+        console.log(Video.secondsToTimeString(this.buffer.playHead / this.fps) + ' (lag: ' + lag + 'ms)');
+
+        this.playTimeout = setTimeout((function () {
+            this.playNextFrame(eachFrame);
+        }).bind(this), Math.max(0, 1000/this.fps - lag));
+    }
+
     pause() {
-        clearInterval(this.playInterval);
+        clearInterval(this.playTimeout);
         clearInterval(this.bufferInterval);
     }
 
@@ -86,6 +96,7 @@ class Video {
                 '-i ' + this.videoPath +
                 ' -ss ' + start +
                 ' -vf fps=' + this.fps +
+                ' -vf scale=8:8' +
                 ' -t ' + duration +
                 ' ' + outfile;
 
@@ -103,7 +114,8 @@ class Video {
                 const frames = [];
                 for (let i = 0; i < num; i++) {
                     const frame = await Image.fromImageFile(outfile.replace('%d', i+1), {
-                        removeAfter: true
+                        removeAfter: true,
+                        prescaled: true
                     });
 
                     frames.push(frame);

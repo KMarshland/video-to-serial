@@ -125,6 +125,7 @@ class Image {
      *
      * Options
      *  removeAfter If true, it deletes the file at imagePath after resolving
+     *  prescaled If true, skips the scale step
      */
     static fromImageFile(imagePath, opts) {
         return new Promise(function (resolve, reject) {
@@ -136,12 +137,18 @@ class Image {
                     return;
                 }
 
-                const pipeline = sharp(data)
-                    .resize(gridSize, gridSize)
-                    .greyscale();
+                let pipeline;
+                if (opts.prescaled) {
+                    pipeline = sharp(data)
+                        .greyscale();
+                } else {
+                    pipeline = sharp(data)
+                        .resize(gridSize, gridSize)
+                        .greyscale();
+                }
 
                 if (storeIntermediateImages) {
-                    pipeline.toFile('tmp/debug-' + new Date() + '.png');
+                    pipeline.toFile('tmp/debug-' + new Date().valueOf() + '.png');
                 }
 
                 pipeline.raw()
@@ -162,7 +169,11 @@ class Image {
 
                         // delete the file if requested
                         if (opts.removeAfter) {
-                            fs.unlink(imagePath, ()=>{});
+                            fs.unlink(imagePath, (err)=>{
+                                if (err) {
+                                    console.error(err);
+                                }
+                            });
                         }
                     });
             });
