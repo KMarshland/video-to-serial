@@ -42,7 +42,7 @@ class Image {
             throw 'Incorrect image size; aborting';
         }
 
-        const buffer = Buffer.alloc(Math.ceil(this.data.length*brightnessBits / byteSize));
+        const buffer = this.storedBuffer || Buffer.alloc(Math.ceil(this.data.length*brightnessBits / byteSize));
         let byte = 0x00;
         for (let i = 0; i < this.data.length; i++) {
 
@@ -53,6 +53,8 @@ class Image {
                 byte = 0x00;
             }
         }
+
+        this.storedBuffer = buffer;
 
         return buffer;
     }

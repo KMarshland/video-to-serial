@@ -1,3 +1,4 @@
+const Deque = require('double-ended-queue');
 const sleep = require('./sleep');
 
 class RollingBuffer {
@@ -17,7 +18,7 @@ class RollingBuffer {
 
         this.bufferHead = 0;
         this.playHead = 0;
-        this.buffer = {};
+        this.buffer = new Deque();
 
         this.productionFunction = productionFunction;
     }
@@ -26,7 +27,7 @@ class RollingBuffer {
      * Prebuffers, so that there's some padding
      */
     async prebuffer() {
-        while (this.bufferHead < this.targetSize && !this.done) {
+        while (this.buffer.length < this.targetSize && !this.done) {
             await this.produce();
         }
     }
@@ -40,7 +41,7 @@ class RollingBuffer {
             return;
         }
 
-        if (this.bufferHead - this.playHead >= this.targetSize) {
+        if (this.buffer.length >= this.targetSize) {
             return;
         }
 
@@ -53,10 +54,20 @@ class RollingBuffer {
         }
 
         for (let i = 0; i < outputs.length; i++) {
-            this.buffer[this.bufferHead++] = outputs[i];
+            this.buffer.enqueue(outputs[i]);
         }
 
-        console.log('Avg latency: ' + Math.round((startTime - new Date()) / outputs.length) + 'ms (' + outputs.length + ' items)');
+        this.bufferHead += outputs.length;
+
+        console.log('Avg latency: ' + Math.round((new Date() - startTime) / outputs.length) + 'ms (' + outputs.length + ' items)');
+    }
+
+    /*
+     * Enqueues a single item
+     */
+    enqueue(item) {
+        this.buffer.enqueue(item);
+        this.bufferHead++;
     }
 
     /*
@@ -67,24 +78,20 @@ class RollingBuffer {
      * Options:
      *  sleepTime: Time in ms to sleep if the buffer is empty. Defaults to 10ms
      */
-    consume(opts) {
+    async consume(opts) {
         opts = opts || {};
 
-        return new Promise((async function (resolve, reject) {
-            if (this.done && this.playHead >= this.bufferHead) {
-                return resolve(null);
-            }
+        if (this.done && this.buffer.length === 0) {
+            return null;
+        }
 
-            while (!this.buffer[this.playHead]) {
-                await sleep(opts.sleepTime || 10);
-            }
+        while (this.buffer.length === 0) {
+            await sleep(opts.sleepTime || 10);
+        }
 
-            const output = this.buffer[this.playHead];
-            delete this.buffer[this.playHead];
-            this.playHead++;
+        this.playHead++;
 
-            resolve(output);
-        }).bind(this));
+        return this.buffer.dequeue();
     }
 
 }
