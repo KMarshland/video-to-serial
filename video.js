@@ -1,6 +1,7 @@
 const exec = require('child_process').exec;
 const spawn = require('child_process').spawn;
 const P2J = require('pipe2jpeg');
+const Deque = require('double-ended-queue');
 const Image = require('./image.js');
 const RollingBuffer = require('./rolling_buffer.js');
 const gridSize = require('./config/gridsize.js');
@@ -27,7 +28,9 @@ class Video {
         this.bufferRatio = opts.bufferRatio || 1;
         this.frameBatchSize = opts.frameBatchSize || 12;
 
-        this.recylable = [];
+        this.recylable = new Deque();
+
+        this.bufferIntervalTime = 1000/this.fps/this.bufferRatio;
     }
 
     async initialize() {
@@ -38,10 +41,11 @@ class Video {
         this.length = await this.duration();
         this.buffer = new RollingBuffer(this.productionFunction.bind(this), {
             targetSize: this.bufferSize,
-            skipPrebuffer: false
+            skipPrebuffer: true
         });
+        this.framesBeforePausing = 0;
 
-        await this.buffer.prebuffer();
+        this.setUpGenerator();
 
         this.initialized = true;
     }
@@ -52,9 +56,7 @@ class Video {
         this.startTime = new Date();
         this.playNextFrame(eachFrame);
 
-        this.bufferInterval = setInterval((function () {
-            this.buffer.produce();
-        }).bind(this), 1000/this.fps/this.bufferRatio);
+        this.bufferInterval = setInterval(this.productionFunction.bind(this), this.bufferIntervalTime);
     }
 
     async playNextFrame(eachFrame) {
@@ -79,81 +81,94 @@ class Video {
     }
 
     pause() {
-        clearInterval(this.playTimeout);
+        clearTimeout(this.playTimeout);
         clearInterval(this.bufferInterval);
     }
 
     /*
-     * Returns a promise to a
+     * Sets up the process that extracts frames
+     * Sends a SIGTSTP to it, so that it can be resumed when we want more frames
+     * On output, it adds it to our buffer
      */
-    productionFunction(head) {
-        return new Promise((async function (resolve, reject) {
-            while (this.processing) { // forbid multiple production threads bogging things down
-                await sleep(10);
-            }
-            this.processing = true;
+    setUpGenerator() {
+        const cmd = 'ffmpeg';
 
-            const time = head / this.fps;
-            if (time >= this.length) {
-                return resolve(null);
-            }
+        const args = [
+            '-loglevel', 'error',
+            '-i',  this.videoPath,
+            '-ss', Video.secondsToTimeString(0),
+            '-vf', 'fps='+this.fps + ', scale=' + gridSize + ':' + gridSize,
+            '-f', 'image2pipe',
+            '-vcodec', 'mjpeg',
+            'pipe:1' // use STDOUT instead of a file
+        ];
 
-            const num = this.frameBatchSize;
+        this.p2j = new P2J();
 
-            const start = Video.secondsToTimeString(time);
-            const duration = Video.secondsToTimeString(num / this.fps);
+        this.p2j.on('jpeg', this.onFrame.bind(this));
 
-            const cmd = 'ffmpeg';
+        const child = spawn(cmd, args);
 
-            const args = [
-                '-loglevel', 'error',
-                '-i',  this.videoPath,
-                '-ss', start,
-                '-vf', 'fps='+this.fps + ', scale=' + gridSize + ':' + gridSize,
-                '-t', duration,
-                '-f', 'image2pipe',
-                '-vcodec', 'mjpeg',
-                'pipe:1'
-            ];
+        child.stderr.on('data', (data) => {
+            console.error(`child stderr:\n${data}`);
+        });
 
-            const frames = [];
-            let startedFrames = 0;
-            let closed = false;
+        child.on('close', () => {
+            console.log('Closed')
+        });
 
-            const p2j = new P2J();
-            p2j.on('jpeg', (async (data) => {
-                startedFrames++;
+        child.stdout.pipe(this.p2j);
 
-                const frame = await Image.fromRawData(data, {
-                    prescaled: true,
-                    recycle: this.recylable.pop() // TODO: race condition?
-                });
+        this.child = child;
 
-                frames.push(frame);
+        // pause the child
+        this.signalChild('SIGTSTP');
+    }
 
-                if (closed && startedFrames == frames.length) {
-                    this.processing = false;
-                    resolve(frames);
-                }
-            }).bind(this));
+    /*
+     * Sends a signal to the child, and waits for it to go through
+     */
+    signalChild(signal) {
+        // const oldKilledValue = this.child.killed;
+        this.child.killed = false;
+        while (!this.child.killed) {
+            this.child.kill(signal);
+        }
+    }
 
-            const child = spawn(cmd, args);
+    /*
+     * Resumes our ffmpeg frame extraction process until enough frames have been produced
+     */
+    async productionFunction() {
+        while (this.processing) { // forbid multiple production threads bogging things down
+            await sleep(10);
+        }
 
-            child.stderr.on('data', (data) => {
-                console.error(`child stderr:\n${data}`);
-            });
+        const time = this.buffer.bufferHead / this.fps;
+        if (time >= this.length) {
+            return;
+        }
 
-            child.on('close', () => {
-                closed = true;
+        this.processing = true;
+        this.framesBeforePausing = this.frameBatchSize;
+        this.signalChild('SIGCONT');
+    }
 
-                if (startedFrames == frames.length) {
-                    this.processing = false;
-                    resolve(frames);
-                }
-            });
+    /*
+     * Called every time a frame comes from the child
+     */
+    async onFrame(data) {
+        this.framesBeforePausing --;
+        if (this.framesBeforePausing <= 0) {
+            this.signalChild('SIGTSTP');
+            this.processing = false;
+        }
 
-            child.stdout.pipe(p2j);
-        }).bind(this));
+        const frame = await Image.fromRawData(data, {
+            prescaled: false,
+            recycle: this.recylable.length ? this.recylable.pop() : null // TODO: race condition?
+        });
+        this.buffer.enqueue(frame);
     }
 
     /*
