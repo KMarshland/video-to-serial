@@ -50,6 +50,9 @@ class Video {
             skipPrebuffer: true
         });
         this.framesBeforePausing = 0;
+        this.startAt = 100;
+        this.buffer.playHead = this.startAt * this.fps;
+        this.buffer.bufferHead = this.startAt * this.fps;
 
         this.setUpGenerator();
 
@@ -88,10 +91,15 @@ class Video {
         this.recylable.push(frame);
 
         const realTime = new Date() - this.startTime;
-        const lag = realTime - 1000*this.buffer.playHead / this.fps;
+        const lag = realTime - 1000*(this.buffer.playHead / this.fps - this.startAt);
         console.log(Video.secondsToTimeString(this.buffer.playHead / this.fps) + ' (lag: ' + lag + 'ms)');
 
-        if (this.buffer.playHead % this.fps == 0) {
+        let seekFrequency = 10; // every n seconds re-seek
+        if ((this.buffer.playHead - this.startAt*this.fps) < 3*this.fps) { // seek earlier in the beginning
+            seekFrequency = 1;
+        }
+
+        if (this.playOnScreen && this.buffer.playHead % (this.fps * seekFrequency) == 0) {
             this.vlc.seek(this.buffer.playHead / this.fps);
         }
 
@@ -121,7 +129,7 @@ class Video {
         const args = [
             '-loglevel', 'error',
             '-i',  this.videoPath,
-            '-ss', Video.secondsToTimeString(0),
+            '-ss', Video.secondsToTimeString(this.startAt),
             '-vf', 'fps='+this.fps + ', scale=' + gridSize + ':' + gridSize,
             '-f', 'image2pipe',
             '-vcodec', 'mjpeg',
@@ -136,11 +144,11 @@ class Video {
 
         child.stderr.on('data', (data) => {
             console.error(`child stderr:\n${data}`);
-    });
+        });
 
         child.on('close', () => {
             console.log('Closed')
-    });
+        });
 
         child.stdout.pipe(this.p2j);
 

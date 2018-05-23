@@ -34,7 +34,7 @@ function writeImage(image) {
         if (err) {
             return console.log('Error on write: ', err.message);
         }
-        !console.log('Wrote: ', buffer);
+        !quietMode && console.log('Wrote: ', buffer);
     });
 }
 
@@ -56,7 +56,7 @@ function writeImages(images, delay) {
     writeNext();
 }
 
-let video;
+let video = null;
 port.on('open', function() {
     let file = process.argv[process.argv.length - 1];
     if (file[0] == '-' || file == 'main.js') { // ignore normal args
@@ -116,58 +116,45 @@ port.on('open', function() {
     }, 2500);
 });
 
-let recentData = '';
-let printTimeout;
-console.log('Waiting for data');
-port.on('data', function (data) {
+if (video || printReturns) {
+    let recentData = '';
+    let printTimeout;
+    console.log('Waiting for data');
+    port.on('data', function (data) {
 
-    const asString = data.toString('utf8');
-    if (asString.indexOf('pause') != -1) {
-        if (video.playing) {
-            video.pause();
-        } else {
-            video.play(function (frame) {
-                if (!frame) {
-                    port.close();
-                    return;
-                }
+        const asString = data.toString('utf8');
+        if (video && asString.indexOf('pause') != -1) {
+            if (video.playing) {
+                video.pause();
+            } else {
+                video.play(function (frame) {
+                    if (!frame) {
+                        port.close();
+                        return;
+                    }
 
-                writeImage(frame);
-            });
+                    writeImage(frame);
+                });
+            }
         }
-    }
 
-    if (printReturns) {
-        recentData += asString;
+        if (printReturns) {
+            recentData += asString;
 
-        if (recentData.length > 100 || recentData.indexOf("\n") != -1) {
-            printTimeout && clearTimeout(printTimeout);
-            console.log('Data:');
-            console.log(recentData);
-            recentData = '';
-        } else {
-            printTimeout && clearTimeout(printTimeout);
-            printTimeout = setTimeout(function () {
+            if (recentData.length > 100 || recentData.indexOf("\n") != -1) {
+                printTimeout && clearTimeout(printTimeout);
+                console.log('Data:');
                 console.log(recentData);
                 recentData = '';
-            }, 50);
-        }
-    }
-});
-
-setInterval(function () {
-    setTimeout(function () {
-        video.pause();
-    }, 2000);
-    setTimeout(function () {
-        video.play(function (frame) {
-            if (!frame) {
-                port.close();
-                return;
+            } else {
+                printTimeout && clearTimeout(printTimeout);
+                printTimeout = setTimeout(function () {
+                    console.log(recentData);
+                    recentData = '';
+                }, 50);
             }
+        }
+    });
+}
 
-            writeImage(frame);
-        });
-    }, 4000);
-}, 6000);
 

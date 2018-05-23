@@ -5,6 +5,12 @@ const sleep = require('./sleep.js');
 const vlcExecutable = '/Applications/VLC.app/Contents/MacOS/VLC';
 
 class VLCControl {
+
+    /*
+     * Options
+     *  debug: prints all output
+     *
+     */
     constructor(opts) {
         opts = opts || {};
         this.debug = opts.debug;

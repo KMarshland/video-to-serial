@@ -149,10 +149,24 @@ class Image {
                 .toBuffer()
                 .catch(reject)
                 .then(function (greyscale) {
+                    let min = 255;
+                    let max = 0;
+                    for (let i = 0; i < greyscale.length; i++) {
+                        if (greyscale[i] > max) {
+                            max = greyscale[i];
+                        }
+
+                        if (greyscale[i] < min) {
+                            min = greyscale[i];
+                        }
+                    }
+
+                    const multiplier = 255 / (max - min) / brightnessDivisor;
+
                     if (opts.recycle) {
                         for (let i = 0; i < greyscale.length; i++) {
                             // quantize the 8 bit grayscale to brightnessBits bits
-                            const darkness = Math.floor(greyscale[i] / brightnessDivisor);
+                            const darkness = Math.floor((greyscale[i] - min) * multiplier);
 
                             // invert it, as 255 is max brightness, not black
                             opts.recycle.data[i] = maxBrightness - darkness;
@@ -164,7 +178,7 @@ class Image {
 
                         for (let i = 0; i < greyscale.length; i++) {
                             // quantize the 8 bit grayscale to brightnessBits bits
-                            const darkness = Math.floor(greyscale[i] / brightnessDivisor);
+                            const darkness = Math.floor((greyscale[i] - min) * multiplier);
 
                             // invert it, as 255 is max brightness, not black
                             data.push(maxBrightness - darkness);
