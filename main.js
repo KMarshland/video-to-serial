@@ -122,7 +122,7 @@ if (printReturns) {
     port.on('data', function (data) {
         recentData += data.toString('utf8');
 
-        if (recentData.length > 100) {
+        if (recentData.length > 100 || recentData.indexOf("\n") != -1) {
             printTimeout && clearTimeout(printTimeout);
             console.log('Data:');
             console.log(recentData);
@@ -137,4 +137,3 @@ if (printReturns) {
     });
 }
 
-console.log(process.pid);

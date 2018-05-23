@@ -3,6 +3,7 @@ const spawn = require('child_process').spawn;
 const P2J = require('pipe2jpeg');
 const Deque = require('double-ended-queue');
 const Image = require('./image.js');
+const VLCControl = require('./vlc.js');
 const RollingBuffer = require('./rolling_buffer.js');
 const gridSize = require('./config/gridsize.js');
 const sleep = require('./sleep.js');
@@ -18,6 +19,7 @@ class Video {
      *  fps Frames per second
      *  bufferSize How many frames to keep in the buffer
      *  bufferRatio How much more frequently to check the buffer than checking video play
+     *  playOnScreen Whether or not to mirror in VLC. Defaults to true
      */
     constructor(videoPath, opts) {
         this.videoPath = videoPath;
@@ -27,6 +29,10 @@ class Video {
         this.bufferSize = opts.bufferSize || 1; // frames in advance to hold a buffer
         this.bufferRatio = opts.bufferRatio || 1;
         this.frameBatchSize = opts.frameBatchSize || 12;
+        if (opts.playOnScreen === undefined) {
+            opts.playOnScreen = true;
+        }
+        this.playOnScreen = opts.playOnScreen;
 
         this.recylable = new Deque();
 
@@ -47,12 +53,20 @@ class Video {
 
         this.setUpGenerator();
 
+        if (this.playOnScreen) {
+            this.vlc = new VLCControl();
+            await this.vlc.loadVideo(this.videoPath);
+        }
+
         this.initialized = true;
     }
 
     async play(eachFrame) {
         await this.initialize();
 
+        if (this.playOnScreen) {
+            this.vlc.play();
+        }
         this.startTime = new Date();
         this.playNextFrame(eachFrame);
 
@@ -75,6 +89,10 @@ class Video {
         const lag = realTime - 1000*this.buffer.playHead / this.fps;
         console.log(Video.secondsToTimeString(this.buffer.playHead / this.fps) + ' (lag: ' + lag + 'ms)');
 
+        if (this.buffer.playHead % this.fps == 0) {
+            this.vlc.seek(this.buffer.playHead / this.fps);
+        }
+
         this.playTimeout = setTimeout((function () {
             this.playNextFrame(eachFrame);
         }).bind(this), Math.max(0, 1000/this.fps - lag));
@@ -83,6 +101,9 @@ class Video {
     pause() {
         clearTimeout(this.playTimeout);
         clearInterval(this.bufferInterval);
+        if (this.playOnScreen) {
+            this.vlc.pause();
+        }
     }
 
     /*
@@ -111,11 +132,11 @@ class Video {
 
         child.stderr.on('data', (data) => {
             console.error(`child stderr:\n${data}`);
-        });
+    });
 
         child.on('close', () => {
             console.log('Closed')
-        });
+    });
 
         child.stdout.pipe(this.p2j);
 
