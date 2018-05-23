@@ -23,7 +23,6 @@ class VLCControl {
             this.responded = true;
 
             const single = data.toString('utf8').split("\n")[0].trim();
-            console.log('`' + single + '`', single == '1');
 
             if (single == '1') {
                 this.paused = false;

@@ -62,10 +62,12 @@ class Video {
     }
 
     async play(eachFrame) {
+        console.log('Playing');
+        this.playing = true;
         await this.initialize();
 
         if (this.playOnScreen) {
-            this.vlc.play();
+            this.vlc.sendCommand("pause");
         }
         this.startTime = new Date();
         this.playNextFrame(eachFrame);
@@ -99,10 +101,12 @@ class Video {
     }
 
     pause() {
+        console.log('Pausing');
+        this.playing = false;
         clearTimeout(this.playTimeout);
         clearInterval(this.bufferInterval);
         if (this.playOnScreen) {
-            this.vlc.pause();
+            this.vlc.sendCommand("pause");
         }
     }
 

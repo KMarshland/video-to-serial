@@ -56,6 +56,7 @@ function writeImages(images, delay) {
     writeNext();
 }
 
+let video;
 port.on('open', function() {
     let file = process.argv[process.argv.length - 1];
     if (file[0] == '-' || file == 'main.js') { // ignore normal args
@@ -94,7 +95,7 @@ port.on('open', function() {
         }
 
         if (/mov|mp4|mkv/.test(file)) {
-            const video = new Video(file);
+            video = new Video(file);
 
             video.play(function (frame) {
                 if (!frame) {
@@ -115,12 +116,29 @@ port.on('open', function() {
     }, 2500);
 });
 
-if (printReturns) {
-    let recentData = '';
-    let printTimeout;
-    console.log('Waiting for data');
-    port.on('data', function (data) {
-        recentData += data.toString('utf8');
+let recentData = '';
+let printTimeout;
+console.log('Waiting for data');
+port.on('data', function (data) {
+
+    const asString = data.toString('utf8');
+    if (asString.indexOf('pause') != -1) {
+        if (video.playing) {
+            video.pause();
+        } else {
+            video.play(function (frame) {
+                if (!frame) {
+                    port.close();
+                    return;
+                }
+
+                writeImage(frame);
+            });
+        }
+    }
+
+    if (printReturns) {
+        recentData += asString;
 
         if (recentData.length > 100 || recentData.indexOf("\n") != -1) {
             printTimeout && clearTimeout(printTimeout);
@@ -134,6 +152,22 @@ if (printReturns) {
                 recentData = '';
             }, 50);
         }
-    });
-}
+    }
+});
+
+setInterval(function () {
+    setTimeout(function () {
+        video.pause();
+    }, 2000);
+    setTimeout(function () {
+        video.play(function (frame) {
+            if (!frame) {
+                port.close();
+                return;
+            }
+
+            writeImage(frame);
+        });
+    }, 4000);
+}, 6000);
 
