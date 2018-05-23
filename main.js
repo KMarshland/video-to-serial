@@ -1,6 +1,7 @@
 const fs = require('fs');
 const Image = require('./image.js');
 const Video = require('./video.js');
+const sleep = require('./sleep.js');
 
 const mockArduino = process.argv.includes('--test') || process.argv.includes('-t');
 const printReturns = process.argv.includes('--print') || process.argv.includes('-p');
@@ -20,21 +21,27 @@ if (mockArduino) {
 }
 
 const port = new SerialPort(portLocation, {
-    baudRate: baud
+    baudRate: baud,
+    XON: true
 });
 
 /*
  * Image should be an array of bits
  */
-function writeImage(image) {
-    !quietMode && image.show();
+async function writeImage(image) {
+    // TODO: make this drain before writing the next image
+    return new Promise(function (resolve, reject) {
+        !quietMode && image.show();
 
-    const buffer = image.buffer();
-    port.write(buffer, function (err) {
-        if (err) {
-            return console.log('Error on write: ', err.message);
-        }
-        !quietMode && console.log('Wrote: ', buffer);
+        const buffer = image.buffer();
+        port.write(buffer, function (err) {
+            if (err) {
+                return reject( err.message);
+
+            }
+            !quietMode && console.log('Wrote: ', buffer);
+            resolve();
+        });
     });
 }
 
@@ -96,16 +103,7 @@ port.on('open', function() {
 
         if (/mov|mp4|mkv/.test(file)) {
             video = new Video(file);
-
-            video.play(function (frame) {
-                if (!frame) {
-                    port.close();
-                    return;
-                }
-
-                writeImage(frame);
-            });
-
+            playVideo();
             return;
         }
     }
@@ -115,6 +113,21 @@ port.on('open', function() {
         writeImage(Image.random());
     }, 2500);
 });
+
+function playVideo() {
+    if (!video) {
+        return;
+    }
+
+    video.play(async function (frame) {
+        if (!frame) {
+            port.close();
+            return;
+        }
+
+        await writeImage(frame);
+    });
+}
 
 if (video || printReturns) {
     let recentData = '';
@@ -127,14 +140,7 @@ if (video || printReturns) {
             if (video.playing) {
                 video.pause();
             } else {
-                video.play(function (frame) {
-                    if (!frame) {
-                        port.close();
-                        return;
-                    }
-
-                    writeImage(frame);
-                });
+                playVideo();
             }
         }
 
